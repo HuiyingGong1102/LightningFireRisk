@@ -9,7 +9,7 @@ This repository contains code, dependency specifications and reproduction instru
 
 The cleaned dataset described in the manuscript contains **1,046 lightning-fire events**, recorded from **23 May 2005 to 20 August 2024**: 576 in Inner Mongolia and 470 in Heilongjiang. Clustering uses five temperature and five precipitation variables; drought index is an additional variable for interpretation.
 
-**Request data from a corresponding author:** Huiying Gong ([gonghuiying@bimsa.cn](mailto:gonghuiying@bimsa.cn)) or Jianhua Du ([yjc1303@126.com](mailto:yjc1303@126.com)). Save the authorized cleaned UTF-8 table as `data/raw/new_data.csv`. See [required columns](data/raw/README.md). This code begins with the cleaned table; station matching, interpolation and manual quality control require separate upstream inputs.
+**Request data from a corresponding author:** Jianhua Du ([yjc1303@126.com](mailto:yjc1303@126.com)). Save the authorized cleaned UTF-8 table as `data/raw/new_data.csv`. See [required columns](data/raw/README.md). This code begins with the cleaned table; station matching, interpolation and manual quality control require separate upstream inputs.
 
 ## Environment
 
