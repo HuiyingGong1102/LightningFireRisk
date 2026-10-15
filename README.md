@@ -1,0 +1,119 @@
+# LightningFireRisk
+
+Code for **Learning Lightning-Induced Forest Fire Environmental Regimes and Quantifying Environmental Risk through Functional Clustering and Typicality**.
+
+This repository contains code, dependency specifications and reproduction instructions only. **No study data, fitted models, figures or result tables are distributed.** Environmental risk is compatibility with historical lightning-fire conditions, not an absolute fire-occurrence probability.
+
+
+## Data
+
+The cleaned dataset described in the manuscript contains **1,046 lightning-fire events**, recorded from **23 May 2005 to 20 August 2024**: 576 in Inner Mongolia and 470 in Heilongjiang. Clustering uses five temperature and five precipitation variables; drought index is an additional variable for interpretation.
+
+**Request data from a corresponding author:** Huiying Gong ([gonghuiying@bimsa.cn](mailto:gonghuiying@bimsa.cn)) or Jianhua Du ([yjc1303@126.com](mailto:yjc1303@126.com)). Save the authorized cleaned UTF-8 table as `data/raw/new_data.csv`. See [required columns](data/raw/README.md). This code begins with the cleaned table; station matching, interpolation and manual quality control require separate upstream inputs.
+
+## Environment
+
+Inspected local environment: **Python 3.12.11**, **R 4.5.1**, Windows, CPU execution.
+
+| Python package | Version |
+| --- | --- |
+| NumPy | 2.3.2 |
+| pandas | 2.3.2 |
+| SciPy | 1.16.1 |
+| scikit-learn | 1.7.1 |
+| matplotlib | 3.10.5 |
+
+R dependencies include dplyr 1.2.1, readr 2.2.0, tibble 3.3.1, jsonlite 2.0.0, tidyr 1.3.2, purrr 1.2.2, mclust 6.1.3, clue 0.3-68, and xgboost 3.2.1.1. `requirements.txt` and `renv.lock` record their dependency versions. These are inspected local versions, not a reconstruction of the historical manuscript environment.
+
+From the repository root:
+
+```sh
+python -m venv .venv
+# Windows PowerShell: .\.venv\Scripts\Activate.ps1
+# Linux/macOS: source .venv/bin/activate
+python -m pip install -r requirements.txt
+Rscript --vanilla scripts/install_r.R
+```
+
+The R installer restores the recorded packages into `renv/library`. A fresh lock-file installation has not been tested. Some installed R packages were built under R 4.5.3; the local bootstrap comparison produced tables but encountered a native R shutdown error under R 4.5.1. Use a compatible R/package installation and verify exit status before accepting a complete run.
+
+## Manuscript settings
+
+Both R and Python read [config/paper.json](config/paper.json).
+
+| Analysis | Setting |
+| --- | --- |
+| Temperature scaling | Min–Max to 1–2 |
+| Precipitation scaling | log1p, 1st/99th-percentile winsorization, reversed Min–Max to 1–2 |
+| Environmental index | Sum over training events; ascending feature order within each block |
+| Candidate regimes | K=2–10, 50 initializations per K |
+| Cross-validation | Five folds; preprocessing fitted on training samples only |
+| Bootstrap stability | 100 resamples, K=5, 50 initializations per resample |
+| Temporal testing | 2015–2016, 2017–2018, 2019–2020, 2021–2024; training uses preceding years from 2005 |
+| Provincial testing | Heilongjiang → Inner Mongolia and Inner Mongolia → Heilongjiang |
+| Perturbations | λ=0, 0.01, 0.025, 0.05, 0.1, 0.2, 0.4, 0.5; 100 repeats per level |
+| Environmental risk | Maximum posterior probability × empirical typicality |
+| XGBoost | 70%/30% split; 300 rounds; depth 4; eta 0.05; subsample and colsample_bytree 0.8 |
+
+Event-level allometric fitting minimizes original-scale residual sum of squares with Nelder–Mead, initialized by log–log regression. Functional mixture fitting uses EM: standard responsibility-based mixture weights, GLS mean estimates conditional on covariance, and a Nelder–Mead covariance M-step. BIC is computed from final observed mixture likelihood with `p = 4 + 4K + K - 1` free parameters. Training, validation and perturbation share the same density implementation.
+
+Each covariance block is a constant-coefficient **SAD(1)** implementation: `e_j = phi*e_(j-1) + eta_j`, independent innovations with variance `gamma²`, and a finite initial boundary `e_0=0`. The two blocks have no cross-block covariance. The manuscript does not specify the initial boundary or polynomial orders for SAD coefficients; the finite boundary and constant coefficients are explicit implementation conventions. They replace the supplied stationary AR(1) implementation and can change numerical results. This is a parsimonious first-order model, not every generalized SAD parameterization described in the [cited literature](https://pubmed.ncbi.nlm.nih.gov/16646852/).
+
+Solver tolerances, iteration caps, covariance jitter, initialization details and 5,000 draws for 95% evaluation intervals are in `numerical`. These values are implementation defaults where the manuscript gives no numerical value. They must not be described as reported manuscript parameters.
+
+## Random seeds
+
+Root seed: **2026**, fixed for this release. R uses `RNGkind("Mersenne-Twister", "Inversion", "Rejection")`. Five-fold membership is generated by `sample(rep(1:5,length.out=N))`; bootstrap sampling resets seed 2026 and draws N events with replacement for each resample.
+
+For full-data and validation fits, `seed = 2026 + dataset_id*10000 + K*100 + run_id`. Dataset IDs are 0 for full data, 101–105 for CV, 201–204 for temporal splits, and 301–302 for spatial splits sorted as `split_HLJ`, `split_IM`. Bootstrap fits use `2026 + bootstrap_id*10000 + run_id`. Python seeds random, NumPy and K-means, and limits numerical libraries to one thread. Perturbation uses NumPy RandomState(2026); XGBoost and its 70/30 split use seed 2026 and one thread. Representative trajectories are a seeded sample of five events.
+
+Models save the seed, data hash, complete settings, versions, likelihood history and convergence flags. Preparation saves membership, feature ordering and scalers. Retain these together for reproducibility.
+
+## Run
+
+Obtain the data first, then run these commands from the repository root:
+
+```sh
+Rscript --vanilla scripts/prepare.R
+python scripts/run.py train --group full
+python scripts/run.py train --group cv
+python scripts/run.py evaluate --group cv
+python scripts/run.py train --group temporal
+python scripts/run.py evaluate --group temporal
+python scripts/run.py train --group spatial
+python scripts/run.py evaluate --group spatial
+python scripts/run.py train --group bootstrap
+Rscript --vanilla scripts/stability.R
+python scripts/plot_stability.py
+Rscript --vanilla scripts/describe.R 1
+python scripts/run.py perturb
+Rscript --vanilla scripts/interpret.R
+```
+
+Full analysis includes thousands of fits. Runs write to `results/` and overwrite matching output paths. Models that do not converge require inspection before reporting results. Regime labels can permute across fits; align labels to a reference before interpreting M1–M5. Historical figures are not guaranteed to be numerically identical to this manuscript-aligned implementation; the complete publication-scale run has not been repeated.
+
+## Expected outputs
+
+Outputs are generated locally and ignored by Git; no outputs are included in this repository.
+
+| Step | Expected outputs |
+| --- | --- |
+| Preparation | Log-transformed feature matrices, training indices, scalers, feature order, fold/holdout/bootstrap membership, input checksum and R session information |
+| Model fitting | Per-initialization JSON and logs, best model per K, BIC/NLL selection table, runtime settings and convergence history |
+| Validation | Held-out NLL, regime posteriors, empirical typicality, risk, bootstrap intervals and summary tables |
+| Stability | ARI/NMI, Hungarian-aligned module Jaccard, baseline reference assignments, parameter tables, combined comparison table and plot |
+| Description | Allometric R², Spearman correlations, drought Kruskal–Wallis test, regime sizes/monthly counts, representative-event IDs and trajectory PDF |
+| Perturbation | Sample risk/posteriors/typicality at each λ, ARI/NMI/accuracy, module retention and replicate summaries |
+| Interpretation | Split membership, confusion matrix, precision/recall/F1, accuracy/kappa, SHAP importance, XGBoost model and R session information |
+
+The baselines are Ward.D2 agglomerative clustering, K-means, and mclust diagonal/full covariance mixtures. The supplied baseline implementation retries singular mclust fits with prior shrinkage 0.01, then with Gaussian jitter of SD 1e-7 if necessary; these numerical fallbacks are implementation choices, not reported manuscript settings. SHAP averages absolute contributions over training events and regimes, excluding the bias term. Publication map boundaries and original figure layouts are not distributed.
+
+## Check
+
+```sh
+python -m unittest discover -s tests -v
+```
+
+Synthetic tests require no study data and check the SAD(1) recurrence, positive covariance, seed repeatability, nondecreasing EM likelihood, posterior normalization, final BIC and typicality orientation.
+
+Local checks also exercised preparation of all manuscript splits and 100 bootstrap datasets, a full-data K=5 fit with the default solver (converged), reduced training/validation/perturbation runs, event-level allometric fitting and XGBoost/SHAP. These checks are not the complete 50-initialization, 100-repeat publication analysis. Their private inputs and outputs are excluded from this repository.

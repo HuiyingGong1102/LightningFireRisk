@@ -1,0 +1,33 @@
+# Private input and generated artifacts
+/data/raw/*
+!/data/raw/README.md
+/results/*
+/renv/library/
+/renv/staging/
+/.venv/
+__pycache__/
+*.py[cod]
+.Rhistory
+.RData
+.Ruserdata
+.Rproj.user/
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.log
+*.zip
+# Reject accidental study artifacts anywhere in the tree.
+*.csv
+*.json
+!config/paper.json
+*.xlsx
+*.xls
+*.rds
+*.RDS
+*.ubj
+*.png
+*.jpg
+*.tif
+*.tiff
+*.pdf
